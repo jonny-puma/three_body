@@ -9,16 +9,16 @@ from scipy.integrate._ivp.ivp import OdeResult
 l2 = np.linalg.norm
 
 # Simulation parameters
-dt = 0.01
-t_end = 50 #6.3259
+dt = 0.005
+t_end = 100 #6.3259
 
 # Integration algorithm: 0 = scipy, 1 = forward Euler
 algo = 0
 
 # Parameter estimator parameters
-gamma = 0.5
-kp = 2
-kq = 8
+gamma = 6
+kp = 15
+kq = 30
 
 # Physical constants
 g = 1
@@ -51,6 +51,7 @@ def forward_euler(fun, t_span, y0):
         y[:,0] = y0
         for i in range(1,l):
             y[:,i] = y[:,i-1] + fun(t[i], y[:,i-1])*dt
+
         message = "Forward Euler successfull"
         success = True
     except Exception as e:
@@ -92,20 +93,20 @@ def parameter_dynamics(xh, x):
 
     # Partial derivatives
     del_Y = np.zeros((12, 21))
-    del_Y[:,:12] = np.array([[2*qh1[0], 0, 0, 4*qh1[0]**3, 0, 0, 0, 0, 0, 0, 0, 0],
-                             [2*qh1[1], 0, 0, 4*qh1[1]**3, 0, 0, 0, 0, 0, 0, 0, 0],
-                             [0, 2*qh2[0], 0, 0, 4*qh2[0]**3, 0, 0, 0, 0, 0, 0, 0],
-                             [0, 2*qh2[1], 0, 0, 4*qh2[1]**3, 0, 0, 0, 0, 0, 0, 0],
-                             [0, 0, 2*qh3[0], 0, 0, 4*qh3[0]**3, 0, 0, 0, 0, 0, 0],
-                             [0, 0, 2*qh3[1], 0, 0, 4*qh3[1]**3, 0, 0, 0, 0, 0, 0],
-                             [0, 0, 0, 0, 0, 0, -2*ph1[0], 0, 0, -4*ph1[0]**3, 0, 0],
-                             [0, 0, 0, 0, 0, 0, -2*ph1[1], 0, 0, -4*ph1[1]**3, 0, 0],
-                             [0, 0, 0, 0, 0, 0, 0, -2*ph2[0], 0, 0, -4*ph2[0]**3, 0],
-                             [0, 0, 0, 0, 0, 0, 0, -2*ph2[1], 0, 0, -4*ph2[1]**3, 0],
-                             [0, 0, 0, 0, 0, 0, 0, 0, -2*ph3[0], 0, 0, -4*ph2[0]**3],
-                             [0, 0, 0, 0, 0, 0, 0, 0, -2*ph3[1], 0, 0, -4*ph2[1]**3]])
+    del_Y[:,:12] = np.array([[0, 0, 0, 0, 0, 0, 2*ph1[0], 0, 0, 4*ph1[0]**3, 0, 0],
+                             [0, 0, 0, 0, 0, 0, 2*ph1[1], 0, 0, 4*ph1[1]**3, 0, 0],
+                             [0, 0, 0, 0, 0, 0, 0, 2*ph2[0], 0, 0, 4*ph2[0]**3, 0],
+                             [0, 0, 0, 0, 0, 0, 0, 2*ph2[1], 0, 0, 4*ph2[1]**3, 0],
+                             [0, 0, 0, 0, 0, 0, 0, 0, 2*ph3[0], 0, 0, 4*ph3[0]**3],
+                             [0, 0, 0, 0, 0, 0, 0, 0, 2*ph3[1], 0, 0, 4*ph3[1]**3],
+                             [-2*qh1[0], 0, 0, -4*qh1[0]**3, 0, 0, 0, 0, 0, 0, 0, 0],
+                             [-2*qh1[1], 0, 0, -4*qh1[1]**3, 0, 0, 0, 0, 0, 0, 0, 0],
+                             [0, -2*qh2[0], 0, 0, -4*qh2[0]**3, 0, 0, 0, 0, 0, 0, 0],
+                             [0, -2*qh2[1], 0, 0, -4*qh2[1]**3, 0, 0, 0, 0, 0, 0, 0],
+                             [0, 0, -2*qh3[0], 0, 0, -4*qh3[0]**3, 0, 0, 0, 0, 0, 0],
+                             [0, 0, -2*qh3[1], 0, 0, -4*qh3[1]**3, 0, 0, 0, 0, 0, 0]])
 
-    del_Y[:3,12:] = np.array([[-gf12_1[0], -gf13_1[0], 0, -gf12_2[0], -gf13_2[0], 0, -gf12_3[0], -gf13_3[0], 0],
+    del_Y[6:,12:] = np.array([[-gf12_1[0], -gf13_1[0], 0, -gf12_2[0], -gf13_2[0], 0, -gf12_3[0], -gf13_3[0], 0],
                               [-gf12_1[1], -gf13_1[1], 0, -gf12_2[1], -gf13_2[1], 0, -gf12_3[1], -gf13_3[1], 0],
                               [gf12_1[0], 0, -gf23_1[0], gf12_2[0], 0, -gf23_2[0], gf12_3[0], 0, -gf23_3[0]],
                               [gf12_1[1], 0, -gf23_1[1], gf12_2[1], 0, -gf23_2[1], gf12_3[1], 0, -gf23_3[1]],
@@ -113,7 +114,7 @@ def parameter_dynamics(xh, x):
                               [0, gf13_1[1], gf23_1[1], 0, gf13_2[1], gf23_2[1], 0, gf13_3[1], gf23_3[1]]])
 
     # Change in state estimate
-    dah = gamma*0.5*del_Y.T @ np.flip(xh-x)
+    dah = -gamma*del_Y.T @ (xh-x)
     return dah
 
 def estimate_dynamics(xh, x, ah):
@@ -137,8 +138,8 @@ def estimate_dynamics(xh, x, ah):
 
     # Gravitational force vectors
     gf12_1 = gforce_1(qh1, qh2, m1*m2)
-    gf13_1 = gforce_1(qh1, qh3, m1*m2)
-    gf23_1 = gforce_1(qh2, qh3, m1*m2)
+    gf13_1 = gforce_1(qh1, qh3, m1*m3)
+    gf23_1 = gforce_1(qh2, qh3, m2*m3)
 
     gf12_2 = gforce_2(qh1, qh2, m1*m2)
     gf13_2 = gforce_2(qh1, qh3, m1*m3)
@@ -150,29 +151,29 @@ def estimate_dynamics(xh, x, ah):
 
     # Partial derivatives
     del_Y = np.zeros((12, 21))
-    del_Y[:,:12] = np.array([[-2*qh1[0], 0, 0, -4*qh1[0]**3, 0, 0, 0, 0, 0, 0, 0, 0],
+    del_Y[:,:12] = np.array([[0, 0, 0, 0, 0, 0, 2*ph1[0], 0, 0, 4*ph1[0]**3, 0, 0],
+                             [0, 0, 0, 0, 0, 0, 2*ph1[1], 0, 0, 4*ph1[1]**3, 0, 0],
+                             [0, 0, 0, 0, 0, 0, 0, 2*ph2[0], 0, 0, 4*ph2[0]**3, 0],
+                             [0, 0, 0, 0, 0, 0, 0, 2*ph2[1], 0, 0, 4*ph2[1]**3, 0],
+                             [0, 0, 0, 0, 0, 0, 0, 0, 2*ph3[0], 0, 0, 4*ph3[0]**3],
+                             [0, 0, 0, 0, 0, 0, 0, 0, 2*ph3[1], 0, 0, 4*ph3[1]**3],
+                             [-2*qh1[0], 0, 0, -4*qh1[0]**3, 0, 0, 0, 0, 0, 0, 0, 0],
                              [-2*qh1[1], 0, 0, -4*qh1[1]**3, 0, 0, 0, 0, 0, 0, 0, 0],
                              [0, -2*qh2[0], 0, 0, -4*qh2[0]**3, 0, 0, 0, 0, 0, 0, 0],
                              [0, -2*qh2[1], 0, 0, -4*qh2[1]**3, 0, 0, 0, 0, 0, 0, 0],
                              [0, 0, -2*qh3[0], 0, 0, -4*qh3[0]**3, 0, 0, 0, 0, 0, 0],
-                             [0, 0, -2*qh3[1], 0, 0, -4*qh3[1]**3, 0, 0, 0, 0, 0, 0],
-                             [0, 0, 0, 0, 0, 0, 2*ph1[0], 0, 0, 4*ph1[0]**3, 0, 0],
-                             [0, 0, 0, 0, 0, 0, 2*ph1[1], 0, 0, 4*ph1[1]**3, 0, 0],
-                             [0, 0, 0, 0, 0, 0, 0, 2*ph2[0], 0, 0, 4*ph2[0]**3, 0],
-                             [0, 0, 0, 0, 0, 0, 0, 2*ph2[1], 0, 0, 4*ph2[1]**3, 0],
-                             [0, 0, 0, 0, 0, 0, 0, 0, 2*ph3[0], 0, 0, 4*ph2[0]**3],
-                             [0, 0, 0, 0, 0, 0, 0, 0, 2*ph3[1], 0, 0, 4*ph2[1]**3]])
+                             [0, 0, -2*qh3[1], 0, 0, -4*qh3[1]**3, 0, 0, 0, 0, 0, 0]])
 
-    del_Y[:3,12:] = -np.array([[-gf12_1[0], -gf13_1[0], 0, -gf12_2[0], -gf13_2[0], 0, -gf12_3[0], -gf13_3[0], 0],
-                               [-gf12_1[1], -gf13_1[1], 0, -gf12_2[1], -gf13_2[1], 0, -gf12_3[1], -gf13_3[1], 0],
-                               [gf12_1[0], 0, -gf23_1[0], gf12_2[0], 0, -gf23_2[0], gf12_3[0], 0, -gf23_3[0]],
-                               [gf12_1[1], 0, -gf23_1[1], gf12_2[1], 0, -gf23_2[1], gf12_3[1], 0, -gf23_3[1]],
-                               [0, gf13_1[0], gf23_1[0], 0, gf13_2[0], gf23_2[0], 0, gf13_3[0], gf23_3[0]],
-                               [0, gf13_1[1], gf23_1[1], 0, gf13_2[1], gf23_2[1], 0, gf13_3[1], gf23_3[1]]])
+    del_Y[6:,12:] = np.array([[-gf12_1[0], -gf13_1[0], 0, -gf12_2[0], -gf13_2[0], 0, -gf12_3[0], -gf13_3[0], 0],
+                              [-gf12_1[1], -gf13_1[1], 0, -gf12_2[1], -gf13_2[1], 0, -gf12_3[1], -gf13_3[1], 0],
+                              [gf12_1[0], 0, -gf23_1[0], gf12_2[0], 0, -gf23_2[0], gf12_3[0], 0, -gf23_3[0]],
+                              [gf12_1[1], 0, -gf23_1[1], gf12_2[1], 0, -gf23_2[1], gf12_3[1], 0, -gf23_3[1]],
+                              [0, gf13_1[0], gf23_1[0], 0, gf13_2[0], gf23_2[0], 0, gf13_3[0], gf23_3[0]],
+                              [0, gf13_1[1], gf23_1[1], 0, gf13_2[1], gf23_2[1], 0, gf13_3[1], gf23_3[1]]])
 
 
     # Change in state estimate
-    dxh = del_Y @ ah + np.hstack((kp*(x[6:]-xh[6:]), kq*(x[:6]-xh[:6])))
+    dxh = del_Y @ ah + np.hstack((kq*(x[:6]-xh[:6]), kp*(x[6:]-xh[6:])))
     return dxh
 
 def gforce_1(x1, x2, m):
@@ -202,8 +203,13 @@ xh = np.zeros(sol.y.shape)
 ah = np.zeros((21, len(sol.t)))
 
 xh[:,0] = y0
-ah[:,0] = np.random.uniform(0.1, 1.9, 6)   
-# ah[:,0] = np.array((0.5, 0.5, 0.5, 1, 1, 1)) + np.random.uniform(-0.3, 0.3, 6)
+a = np.array((0, 0 ,0, 0, 0, 0, 1/(2*m1), 1/(2*m2), 1/(2*m3),
+                    0, 0, 0, g*m1*m2, g*m2*m3, g*m1*m3, 0, 0, 0, 0, 0, 0))
+ah[:,0] = np.random.uniform(0.1, 1.9, 21)
+"""
+noise_gain = 0.5
+ah[:,0] = a + np.random.uniform(-noise_gain, noise_gain, 21)
+"""
 
 # Do parameter estimation and simulate estimated dynamics
 for i in range(len(sol.t)-1):
@@ -229,7 +235,7 @@ plt.title('Particle velocities')
 plt.xlabel(r"$\dot{x}_1$")
 plt.ylabel(r"$\dot{x}_2$")
 
-# Plot paraeter estimate trajectory
+# Plot parameter estimate trajectory
 plt.figure(3)
 for i in range(ah.shape[0]):
     plt.plot(sol.t, ah[i,:])
@@ -244,14 +250,11 @@ plt.title("Tracking error")
 plt.xlabel("time, $t$")
 plt.ylabel(r"$\Vert \hat{x} - x \Vert_1$")
 
-"""
 plt.figure(5)
-a = np.array((1/(2*m1), 1/(2*m2), 1/(2*m3), g*m1*m2, g*m2*m3, g*m1*m3))
 ae = np.sum(np.abs(ah.T - a).T, axis=0)
 plt.plot(sol.t, ae)
 plt.title("Parameter estimation error")
 plt.xlabel("time, $t$")
 plt.ylabel(r"$\Vert \hat{a} - a \Vert_1$")
-"""
 
 plt.show()

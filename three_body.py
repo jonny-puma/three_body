@@ -9,18 +9,16 @@ from scipy.integrate._ivp.ivp import OdeResult
 l2 = np.linalg.norm
 
 # Simulation parameters
-# End time set to 1/3 of a period so lines wont overlap
 dt = 0.01
-t_end = 80 #6.3259
+t_end = 20 #6.3259
 
 # Integration algorithm: 0 = scipy, 1 = forward Euler
 algo = 0
 
-
 # Parameter estimator parameters
-gamma = 0.2
-kp = 3
-kq = 10
+gamma = 0
+kp = 0
+kq = 0
 
 # Physical constants
 g = 1
@@ -102,7 +100,7 @@ def parameter_dynamics(xh, x):
                           [0, -gf23[1], -gf13[1]]])
 
     # Change of parameter estimate
-    dah = 0.5*gamma*(dY.T @ (xh-x))
+    dah = gamma*(dY.T @ (xh-x))
     return dah
 
 def estimate_dynamics(xh, x, ah):
@@ -170,8 +168,8 @@ xh = np.zeros(sol.y.shape)
 ah = np.zeros((6, len(sol.t)))
 
 xh[:,0] = y0
-ah[:,0] = np.random.uniform(0.1, 1.9, 6)   
-# ah[:,0] = np.array((0.5, 0.5, 0.5, 1, 1, 1)) + np.random.uniform(-0.3, 0.3, 6)
+# ah[:,0] = np.random.uniform(0.1, 1.9, 6)   
+ah[:,0] = np.array((0.5, 0.5, 0.5, 1, 1, 1)) #+ np.random.uniform(-0.3, 0.3, 6)
 
 # Do parameter estimation and simulate estimated dynamics
 for i in range(len(sol.t)-1):
