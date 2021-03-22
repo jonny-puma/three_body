@@ -5,20 +5,45 @@ from matplotlib.cm import viridis
 from scipy.integrate import solve_ivp
 from scipy.integrate._ivp.ivp import OdeResult
 
+# Set seed to repeat experiment
+np.random.seed(69)
+
 # Shortcut for Euclidian norm
 l2 = np.linalg.norm
 
+def l2_regularizer(x):
+    n = len(x)
+    # Avoid division by zero
+    if l2(x) == 0:
+        return np.zeros((n,n))
+    try:
+        H_inv = np.linalg.inv(np.eye(n)/l2(x) - np.outer(a,a)/(l2(x)**3))
+    except np.linalg.LinAlgError:
+        # If matrix is singular add low amplitude random noise to diagonal and try again
+        w = np.diag(np.random.normal(0, 1e-6, n))
+        H_inv = np.linalg.inv(np.eye(n)/l2(x) - np.outer(a,a)/(l2(x)**3) + w)
+    return H_inv
+
+def unit_regularizer(a):
+    return np.eye(len(a))
+
+
+
 # Simulation parameters
 dt = 0.005
-t_end = 100 #6.3259
+t_end = 30 #6.3259
 
 # Integration algorithm: 0 = scipy, 1 = forward Euler
 algo = 0
 
 # Parameter estimator parameters
-gamma = 6
-kp = 15
-kq = 30
+gamma = 3.5
+kp = 5
+kq = 5
+r_f = 0.25
+regularizer = unit_regularizer #l2_regularizer
+t_open = 30
+parameter_threshold = 0.1
 
 # Physical constants
 g = 1
@@ -60,7 +85,7 @@ def forward_euler(fun, t_span, y0):
     
     return OdeResult(t=t, y=y, success=success, message=message)
 
-def parameter_dynamics(xh, x):
+def parameter_dynamics(xh, x, ah, t):
     """
         Dynamics of parameter estimate a hat
         ph : p hat, estimate of p
@@ -80,8 +105,8 @@ def parameter_dynamics(xh, x):
 
     # Gravitational force vectors
     gf12_1 = gforce_1(qh1, qh2, m1*m2)
-    gf13_1 = gforce_1(qh1, qh3, m1*m2)
-    gf23_1 = gforce_1(qh2, qh3, m1*m2)
+    gf13_1 = gforce_1(qh1, qh3, m1*m3)
+    gf23_1 = gforce_1(qh2, qh3, m2*m3)
 
     gf12_2 = gforce_2(qh1, qh2, m1*m2)
     gf13_2 = gforce_2(qh1, qh3, m1*m3)
@@ -113,8 +138,9 @@ def parameter_dynamics(xh, x):
                               [0, gf13_1[0], gf23_1[0], 0, gf13_2[0], gf23_2[0], 0, gf13_3[0], gf23_3[0]],
                               [0, gf13_1[1], gf23_1[1], 0, gf13_2[1], gf23_2[1], 0, gf13_3[1], gf23_3[1]]])
 
-    # Change in state estimate
-    dah = -gamma*del_Y.T @ (xh-x)
+    # Change in parameter estimate
+    r_l = gamma/(1+r_f*t)
+    dah = -r_l*regularizer(ah) @ del_Y.T @ (xh-x)
     return dah
 
 def estimate_dynamics(xh, x, ah):
@@ -177,19 +203,20 @@ def estimate_dynamics(xh, x, ah):
     return dxh
 
 def gforce_1(x1, x2, m):
-    return g*m*(x1-x2)/l2(x1-x2)**3
+    return g*m*(x1-x2)/(l2(x1-x2)**3)
 
 def gforce_2(x1, x2, m):
-    return 2*g*m*(x1-x2)/l2(x1-x2)**4
+    return 2*g*m*(x1-x2)/(l2(x1-x2)**4)
 
 def gforce_3(x1, x2, m):
-    return 3*g*m*(x1-x2)/l2(x1-x2)**5
+    return 3*g*m*(x1-x2)/(l2(x1-x2)**5)
 
 # Solve IVP
 if algo == 0:
     sol = solve_ivp(dynamics, (0, t_end), y0, max_step=dt)
 elif algo == 1:
     sol = forward_euler(dynamics, (0, t_end), y0)
+
 
 # Print solver status
 if sol.success:
@@ -206,16 +233,18 @@ xh[:,0] = y0
 a = np.array((0, 0 ,0, 0, 0, 0, 1/(2*m1), 1/(2*m2), 1/(2*m3),
                     0, 0, 0, g*m1*m2, g*m2*m3, g*m1*m3, 0, 0, 0, 0, 0, 0))
 ah[:,0] = np.random.uniform(0.1, 1.9, 21)
-"""
-noise_gain = 0.5
-ah[:,0] = a + np.random.uniform(-noise_gain, noise_gain, 21)
-"""
+
+noise_gain = 0.1
+# ah[:,0] = a + np.random.uniform(-noise_gain, noise_gain, 21)
 
 # Do parameter estimation and simulate estimated dynamics
 for i in range(len(sol.t)-1):
     del_t = sol.t[i+1] - sol.t[i]
     xh[:,i+1] = xh[:,i] + estimate_dynamics(xh[:,i], sol.y[:,i], ah[:,i])*del_t
-    ah[:,i+1] = ah[:,i] + parameter_dynamics(xh[:,i], sol.y[:,i])*del_t
+    ah[:,i+1] = ah[:,i] + parameter_dynamics(xh[:,i], sol.y[:,i], ah[:,i], sol.t[i])*del_t
+    # Stop learning after  t_open seconds
+    if sol.t[i] > t_open:
+        kp, kq = 0, 0
 
 # Plot position trajectory
 plt.figure(1)
@@ -223,8 +252,8 @@ for i in range(0,6):
     plt.plot(sol.t, sol.y[i], color=viridis(i/6))
     plt.plot(sol.t, xh[i], linestyle="--", color=viridis(i/6))
 plt.title('Particle positions')
-plt.xlabel("$x_1$")
-plt.ylabel("$x_2$")
+plt.xlabel("$t$")
+plt.ylabel("$q$")
 
 # Plot velocity trajectory
 plt.figure(2)
@@ -232,8 +261,8 @@ for i in range(6,12):
     plt.plot(sol.t, sol.y[i], color=viridis((i-6)/6))
     plt.plot(sol.t, xh[i], linestyle="--", color=viridis((i-6)/6))
 plt.title('Particle velocities')
-plt.xlabel(r"$\dot{x}_1$")
-plt.ylabel(r"$\dot{x}_2$")
+plt.xlabel(r"$t$")
+plt.ylabel(r"$p$")
 
 # Plot parameter estimate trajectory
 plt.figure(3)
@@ -256,5 +285,17 @@ plt.plot(sol.t, ae)
 plt.title("Parameter estimation error")
 plt.xlabel("time, $t$")
 plt.ylabel(r"$\Vert \hat{a} - a \Vert_1$")
+
+plt.figure(6)
+plt.plot(sol.t, np.linalg.norm(ah, axis=0))
+plt.title("Penalization function")
+plt.xlabel("time, $t$")
+plt.ylabel(r"$\Vert \hat{a} \Vert$")
+
+plt.figure(7)
+plt.plot(sol.t, gamma/(1+r_f*sol.t))
+plt.title("Learning rate")
+plt.xlabel("$t$")
+plt.ylabel(r"$\gamma$")
 
 plt.show()

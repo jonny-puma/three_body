@@ -137,3 +137,6 @@ dmypy.json
 
 # simulation data
 data/*
+
+# zip files
+*.zip
