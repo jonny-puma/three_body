@@ -13,6 +13,7 @@ l2 = np.linalg.norm
 
 # Gradient of squared p-norm
 def spnorm_grad(x, p):
+    # Define gradient as zero at x=0
     if np.linalg.norm(x, ord=p) < 1e-16:
         return np.zeros(x.shape)
     else:
@@ -24,18 +25,18 @@ def spnorm_conj_grad(x, p):
     return spnorm_grad(x,q)
 
 # Simulation parameters, one period is 6.3259
-dt = 0.005
+dt = 1
 t_end = 100
 
 # Integration algorithm: 0 = scipy, 1 = forward Euler
 algo = 0
 
 # Parameter estimator parameters
-gamma = 3.5
+gamma = 5
 kp = 5
 kq = 5
 t_d = 0
-r_d = 0
+r_d = 0.01
 norm_order = 1.05
 t_open = t_end
 
@@ -47,19 +48,23 @@ m1, m2, m3 = 1, 1, 1
 x1, x2 =  (-0.97000436, 0.24308753), (0, 0)
 v1, v2 = (0.4662036850, 0.4323657300), (-0.93240737, -0.86473146)
 x3, v3 = (-x1[0], -x1[1]), v1
-y0 = np.array((x1, x2, x3, v1, v2, v3)).flatten()
+x0 = np.array((x1, x2, x3, v1, v2, v3)).flatten()
 
-# System dynamics
-def dynamics(t, y):
-    x1 = y[:2]/m1
-    x2 = y[2:4]/m2
-    x3 = y[4:6]/m3
-    dy = np.zeros(len(y))
-    dy[0:6] = y[6:12]
-    dy[6:8] = -g*m2*(x1-x2)/l2(x1-x2)**3 - g*m3*(x1-x3)/l2(x1-x3)**3
-    dy[8:10] = -g*m3*(x2-x3)/l2(x2-x3)**3 - g*m1*(x2-x1)/l2(x2-x1)**3
-    dy[10:12] = -g*m1*(x3-x1)/l2(x3-x1)**3 - g*m2*(x3-x2)/l2(x3-x2)**3
-    return dy
+# True parameters
+"""
+a = np.array((0, 0 ,0, 0, 0, 0, 1/(2*m1), 1/(2*m2), 1/(2*m3),
+                    0, 0, 0, g*m1*m2, g*m2*m3, g*m1*m3, 0, 0, 0, 0, 0, 0))
+"""
+a = np.array((1/(2*m1), 1/(2*m2), 1/(2*m3), 0, 0 ,0, g*m1*m2, g*m2*m3, g*m1*m3, 0, 0, 0, 
+                    0, 0, 0, 0, 0, 0, 0, 0, 0))/2
+
+# Initial conditions for estimates
+xh0 = x0
+ah0 = np.zeros(21)
+g_ah0 = spnorm_grad(ah0, norm_order)
+
+# Initial condition for total simulation state
+X0 = np.hstack((x0, xh0, g_ah0))
 
 # Simple forward Euler solver for debugging
 def forward_euler(fun, t_span, y0):
@@ -78,6 +83,18 @@ def forward_euler(fun, t_span, y0):
         success = False
     
     return OdeResult(t=t, y=y, success=success, message=message)
+
+# System dynamics
+def dynamics(t, y):
+    x1 = y[:2]/m1
+    x2 = y[2:4]/m2
+    x3 = y[4:6]/m3
+    dy = np.zeros(len(y))
+    dy[0:6] = y[6:12]
+    dy[6:8] = -g*m2*(x1-x2)/l2(x1-x2)**3 - g*m3*(x1-x3)/l2(x1-x3)**3
+    dy[8:10] = -g*m3*(x2-x3)/l2(x2-x3)**3 - g*m1*(x2-x1)/l2(x2-x1)**3
+    dy[10:12] = -g*m1*(x3-x1)/l2(x3-x1)**3 - g*m2*(x3-x2)/l2(x3-x2)**3
+    return dy
 
 def parameter_gradient_dynamics(xh, x, t):
     """
@@ -133,7 +150,7 @@ def parameter_gradient_dynamics(xh, x, t):
                               [0, gf13_1[1], gf23_1[1], 0, gf13_2[1], gf23_2[1], 0, gf13_3[1], gf23_3[1]]])
 
     # Time dependent learning rate
-    r_l = gamma/(1+r*t)
+    r_l = gamma/(1+r_d*t)
     return -r_l*del_Y.T @ (xh-x)
 
 def estimate_dynamics(xh, x, ah):
@@ -190,9 +207,15 @@ def estimate_dynamics(xh, x, ah):
                               [0, gf13_1[0], gf23_1[0], 0, gf13_2[0], gf23_2[0], 0, gf13_3[0], gf23_3[0]],
                               [0, gf13_1[1], gf23_1[1], 0, gf13_2[1], gf23_2[1], 0, gf13_3[1], gf23_3[1]]])
 
-
     # Change in state estimate
     return del_Y @ ah + np.hstack((kq*(x[:6]-xh[:6]), kp*(x[6:]-xh[6:])))
+
+def total_dynamics(t, X):
+    ah = spnorm_conj_grad(X[24:], norm_order)
+    dx = dynamics(t, X[:12])
+    dhx = estimate_dynamics(X[12:24], X[:12], ah)
+    dg_ah = parameter_gradient_dynamics(X[12:24], X[:12], t)
+    return np.hstack((dx, dhx, dg_ah))
 
 # Gravitational force between particles
 def gforce_1(x1, x2, m):
@@ -210,10 +233,13 @@ def hamiltonian(x):
 
 # Solve IVP
 if algo == 0:
-    sol = solve_ivp(dynamics, (0, t_end), y0, max_step=dt)
+    sol = solve_ivp(total_dynamics, (0, t_end), X0, max_step=dt)
 elif algo == 1:
-    sol = forward_euler(dynamics, (0, t_end), y0)
+    sol = forward_euler(total_dynamics, (0, t_end), X0)
 
+x = sol.y[:12]
+xh = sol.y[12:24]
+ah = np.array([spnorm_conj_grad(sol.y[24:, i], norm_order) for i in range(sol.y.shape[1])]).T
 
 # Print solver status
 if sol.success:
@@ -221,38 +247,6 @@ if sol.success:
 else:
     status = "failed"
 print(f'IVP solver {status}: {sol.message}')
-
-# Initialize estimate of state, parameters and parameter gradient
-xh = np.zeros(sol.y.shape)
-ah = np.zeros((21, len(sol.t)))
-g_ah = np.zeros((21, len(sol.t)))
-
-xh[:,0] = y0
-a = np.array((0, 0 ,0, 0, 0, 0, 1/(2*m1), 1/(2*m2), 1/(2*m3),
-                    0, 0, 0, g*m1*m2, g*m2*m3, g*m1*m3, 0, 0, 0, 0, 0, 0))/2
-# noise_gain = 0.1
-# ah[:,0] = a + np.random.uniform(-noise_gain, noise_gain, 21)
-# ah[:,0] = np.random.uniform(0.1, 1.9, 21)
-ah[:,0] = np.zeros(21)
-g_ah[:,0] = spnorm_grad(ah[:,0], norm_order)
-
-r = 0
-# Do parameter estimation and simulate estimated dynamics
-for i in range(len(sol.t)-1):
-    delta_t = sol.t[i+1] - sol.t[i]
-    xh[:,i+1] = xh[:,i] + estimate_dynamics(xh[:,i], sol.y[:,i], ah[:,i])*delta_t
-    g_ah[:,i+1] = g_ah[:,i] + parameter_gradient_dynamics(xh[:,i], sol.y[:,i], sol.t[i])*delta_t
-    ah[:,i+1] = spnorm_conj_grad(g_ah[:,i+1], norm_order)
-    
-    # Open control loop and end adaption after t_open seconds
-    if sol.t[i] > t_open:
-        kp = 0
-        kq = 0
-        gamma = 0
-
-    # Decrease learning rate after t_d
-    if sol.t[i] > t_d:
-        r = r_d
 
 # Plot position trajectory
 plt.figure()
@@ -289,7 +283,7 @@ plt.ylabel("Frequency")
 
 # Plot tracking error
 plt.figure()
-xe = np.sum(np.abs(sol.y - xh), axis=0)
+xe = np.sum(np.abs(x - xh), axis=0)
 plt.plot(sol.t, xe)
 plt.title("Tracking error")
 plt.xlabel("time, $t$")
