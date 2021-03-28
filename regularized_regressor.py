@@ -1,12 +1,9 @@
-import pdb
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.cm import viridis
 from scipy.integrate import solve_ivp
 from scipy.integrate._ivp.ivp import OdeResult
 
-# Set random seed to repeat experiment
-np.random.seed(99)
 
 # Shortcut for Euclidian norm
 l2 = np.linalg.norm
@@ -25,8 +22,8 @@ def spnorm_conj_grad(x, p):
     return spnorm_grad(x,q)
 
 # Simulation parameters, one period is 6.3259
-dt = 1
-t_end = 100
+dt = 0.1
+t_end = 150
 
 # Integration algorithm: 0 = scipy, 1 = forward Euler
 algo = 0
@@ -35,10 +32,8 @@ algo = 0
 gamma = 5
 kp = 5
 kq = 5
-t_d = 0
-r_d = 0.01
-norm_order = 1.05
-t_open = t_end
+r_d = 0.1
+norm_order = 1.01
 
 # Physical constants
 g = 1
@@ -84,7 +79,7 @@ def forward_euler(fun, t_span, y0):
     
     return OdeResult(t=t, y=y, success=success, message=message)
 
-# System dynamics
+# True system dynamics
 def dynamics(t, y):
     x1 = y[:2]/m1
     x2 = y[2:4]/m2
@@ -153,6 +148,7 @@ def parameter_gradient_dynamics(xh, x, t):
     r_l = gamma/(1+r_d*t)
     return -r_l*del_Y.T @ (xh-x)
 
+# State estimate dynamics
 def estimate_dynamics(xh, x, ah):
     """
         Dynamics of state estimate x hat
@@ -237,16 +233,17 @@ if algo == 0:
 elif algo == 1:
     sol = forward_euler(total_dynamics, (0, t_end), X0)
 
-x = sol.y[:12]
-xh = sol.y[12:24]
-ah = np.array([spnorm_conj_grad(sol.y[24:, i], norm_order) for i in range(sol.y.shape[1])]).T
-
 # Print solver status
 if sol.success:
     status = "succeeded"
 else:
     status = "failed"
 print(f'IVP solver {status}: {sol.message}')
+
+# Extract states from solution
+x = sol.y[:12]
+xh = sol.y[12:24]
+ah = np.array([spnorm_conj_grad(sol.y[24:, i], norm_order) for i in range(sol.y.shape[1])]).T
 
 # Plot position trajectory
 plt.figure()
