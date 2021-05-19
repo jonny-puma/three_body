@@ -3,7 +3,7 @@ from matplotlib import pyplot as plt
 
 
 n_samples = 20
-dim_regressor = 600
+dim_regressor = 20
 epochs = 1000000
 rla = 1e-4
 rlb = 1e-4
