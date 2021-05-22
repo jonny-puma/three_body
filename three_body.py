@@ -16,9 +16,9 @@ t_end = 20 #6.3259
 algo = 0
 
 # Parameter estimator parameters
-gamma = 0
-kp = 0
-kq = 0
+gamma = 3.5
+kp = 5
+kq = 5
 
 # Physical constants
 g = 1
@@ -169,7 +169,8 @@ ah = np.zeros((6, len(sol.t)))
 
 xh[:,0] = y0
 # ah[:,0] = np.random.uniform(0.1, 1.9, 6)   
-ah[:,0] = np.array((0.5, 0.5, 0.5, 1, 1, 1)) #+ np.random.uniform(-0.3, 0.3, 6)
+# ah[:,0] = np.array((0.5, 0.5, 0.5, 1, 1, 1)) #+ np.random.uniform(-0.3, 0.3, 6)
+ah[:,0] = np.zeros(6)
 
 # Do parameter estimation and simulate estimated dynamics
 for i in range(len(sol.t)-1):
@@ -204,18 +205,18 @@ plt.xlabel("time, $t$")
 plt.ylabel("$\hat{a}$")
 
 plt.figure(4)
-xe = np.sum(np.abs(sol.y - xh), axis=0)
+xe = np.sum(sol.y - xh, axis=0)
 plt.plot(sol.t, xe)
 plt.title("Tracking error")
 plt.xlabel("time, $t$")
-plt.ylabel(r"$\Vert \hat{x} - x \Vert_1$")
+plt.ylabel(r"$\tilde{x}$")
 
 plt.figure(5)
 a = np.array((1/(2*m1), 1/(2*m2), 1/(2*m3), g*m1*m2, g*m2*m3, g*m1*m3))
-ae = np.sum(np.abs(ah.T - a).T, axis=0)
+ae = np.sum((ah.T - a).T, axis=0)
 plt.plot(sol.t, ae)
 plt.title("Parameter estimation error")
 plt.xlabel("time, $t$")
-plt.ylabel(r"$\Vert \hat{a} - a \Vert_1$")
+plt.ylabel(r"$\tilde{a}$")
 
 plt.show()

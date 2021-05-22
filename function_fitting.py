@@ -6,13 +6,13 @@ n_samples = 10
 dim_regressor = 200
 epochs = 300000
 rla = 2e-4
-rlb = 1e-4
+rlb = 2e-4
 lp_regulizer = 2
 lambda_1 = 0
 lambda_2 = 0
 
-algo = "md"
-norm_order = 10
+algo = "gd"
+norm_order = 1.01
 
 def f(x):
     return x + np.sin(x)
@@ -38,12 +38,10 @@ def grad_l1(x):
 # Gradient of squared p-norm
 def spnorm_grad(x, p):
     # Define gradient as zero close to x=0 to avoid overflows
-    """
-    if np.linalg.norm(x, ord=p) < 2e-16:
+    if np.linalg.norm(x, ord=p) < 1e-3:
         return np.zeros(x.shape)
     else:
-    """
-    return x * (abs(x)/np.linalg.norm(x, ord=p))**(p-2)
+        return x * (abs(x)/np.linalg.norm(x, ord=p))**(p-2)
 
 # Gradient of squared conjugate p-norm (q-norm)
 def spnorm_conj_grad(x, p):
@@ -57,7 +55,7 @@ y = f(x)
 xt = np.random.uniform(0, 10, n_samples)
 yt = f(xt)
 
-a = np.random.uniform(-1, 1, dim_regressor)
+a = np.random.uniform(-0.1, 0.1, dim_regressor)
 b = np.random.uniform(-10, 0, dim_regressor)
 e = np.zeros(epochs)
 et = np.zeros(epochs)

@@ -20,7 +20,6 @@ def spnorm_grad(x, p):
     if np.linalg.norm(x, ord=p) < 2e-16:
         return np.zeros(x.shape)
     else:
-        #return np.sign(x) * np.abs(x)**(p-1) / np.linalg.norm(x, ord=norm_order)**(p-2)
         return x * (abs(x)/np.linalg.norm(x, ord=p))**(p-2)
 
 # Gradient of squared conjugate p-norm (q-norm)
@@ -389,9 +388,9 @@ plt.ylabel(r"$\hat{\mathcal{H}} - \mathcal{H}$")
 
 # Surfplot of Hamiltonian with respect to position for q1
 fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
-axlim = 3.5
+axlim = 2.5
 resolution = 0.05
-q1 = np.arange(-axlim, axlim, resolution)
+q1 = np.arange(-axlim+0.5, axlim+0.5, resolution)
 q2 = np.arange(-axlim, axlim, resolution)
 X_plot, Y_plot = np.meshgrid(q1, q2)
 Z1_plot = np.zeros(X_plot.shape)
