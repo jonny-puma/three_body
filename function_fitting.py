@@ -4,13 +4,10 @@ from matplotlib import pyplot as plt
 
 n_samples = 10
 dim_regressor = 200
-epochs = 300000
+epochs = 1.2e5
 rla = 2e-4
 rlb = 2e-4
 lp_regulizer = 2
-lambda_1 = 0
-lambda_2 = 0
-
 algo = "gd"
 norm_order = 1.01
 
@@ -60,15 +57,30 @@ b = np.random.uniform(-10, 0, dim_regressor)
 e = np.zeros(epochs)
 et = np.zeros(epochs)
 
-if lp_regulizer == 2:
-    regulizer = l2_reg
-    grad_regulizer = grad_l2
-else:
-    regulizer = l1_reg
-    grad_regulizer = grad_l1
-
 if algo == "gd":
-    optimization_details = f"Gradient descent with $\\lambda_1 = {lambda_1}$, $\\lambda_2 = {lambda_2}$"
+
+    if lp_regulizer == 2:
+        lambda_1 = 0.15
+        lambda_2 = 0.3
+        regulizer = l2_reg
+        grad_regulizer = grad_l2
+    elif lp_regulizer == 1:
+        lambda_1 = 0.005
+        lambda_2 = 0.02
+        regulizer = l1_reg
+        grad_regulizer = grad_l1
+    else:
+        lambda_1 = 0
+        lambda_2 = 0
+        regulizer = l1_reg
+        grad_regulizer = grad_l1
+
+    # Supertitle for plot
+    if lambda_1 == 0 and lambda_2 == 0:
+        optimization_details = "Gradient descent"
+    else:
+        optimization_details = f"""Gradient descent with $\ell_{lp_regulizer}$ regularization
+        $\\lambda_1 = {lambda_1}$, $\\lambda_2 = {lambda_2}$"""
 
     for j in range(epochs):
         d_a = 0
@@ -124,31 +136,34 @@ else:
         g_b -= rlb*d_g_b/n_samples
 
 plt.figure()
-plt.semilogy(e)
-plt.semilogy(et)
-plt.legend(("Training error", "Test error"))
-plt.suptitle("Squared fitting error", fontweight="bold")
-plt.title(optimization_details)
 
-
-plt.figure()
-plt.hist(a, bins=30)
-plt.suptitle(r"$\alpha$ distribution", fontweight="bold")
-plt.title(optimization_details)
-
-plt.figure()
-plt.hist(b, bins=30)
-plt.suptitle(r"$\beta$ distribution", fontweight="bold")
-plt.title(optimization_details)
-
-plt.figure()
-xp = np.linspace(0, 10, 100)
+plt.subplot(2,2,1)
+xp = np.linspace(-2, 12, 100)
 yp = np.array([ReLU(xi + b)@a for xi in xp])
 plt.plot(xp, yp)
 plt.plot(xp, f(xp), linestyle="--")
 plt.plot(x, y, "xr")
 plt.legend(("Regressor approximation", "True function", "Training samples"))
-plt.suptitle("Function approximation", fontweight="bold")
-plt.title(optimization_details)
+plt.title("Function approximation")
+plt.suptitle(optimization_details)
+
+plt.subplot(2,2,2)
+plt.semilogy(e)
+plt.semilogy(et)
+plt.ylim((1e-4, 30))
+plt.legend(("Training error", "Test error"))
+plt.title("Squared fitting error")
+
+
+plt.subplot(2,2,3)
+plt.hist(a, bins=50, range=(-0.5, 0.5))
+plt.ylim((0, 80))
+plt.title(r"$\alpha$ distribution")
+
+plt.subplot(2,2,4)
+plt.hist(b, bins=50, range=(-12,2))
+plt.ylim((0, 20))
+plt.title(r"$\beta$ distribution")
+
 plt.show()
 

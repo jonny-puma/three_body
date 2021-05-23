@@ -43,7 +43,7 @@ def learning_rate(t):
 
 # Simulation parameters, one period is 6.3259
 dt = 0.1
-t_end = 120
+t_end = 150
 
 # Integration algorithm: 0 = scipy, 1 = forward Euler
 solver = 0
@@ -63,7 +63,7 @@ t_open = t_end
 r_d = 1.5
 theta = 0.3
 w_t = 0
-norm_order = 1.05
+norm_order = 2
 
 # Physical constants
 g = 1
@@ -311,12 +311,13 @@ plt.figure()
 for i in range(ah.shape[0]):
     plt.plot(sol.t, ah[i,:])
 plt.title("Parameter estimate trajectory")
+plt.ylim(-0.5, 3)
 plt.xlabel("time, $t$")
 plt.ylabel("$\hat{a}$")
 
 # Plot histogram of final parameter values
 plt.figure()
-plt.hist(ah[:,-1], bins=20)
+plt.hist(ah[:,-1], bins=20, range=(-0.2, 1.2))
 plt.title("Parameter distribution")
 plt.xlabel("Parameter value")
 plt.ylabel("Frequency")
@@ -338,7 +339,6 @@ plt.plot(sol.t, ae)
 plt.title("Parameter estimation error")
 plt.xlabel("time, $t$")
 plt.ylabel(r"$\Vert \hat{a} - a \Vert_1$")
-"""
 
 # Plot parameter bregman divergence from initial condition
 plt.figure()
@@ -355,6 +355,7 @@ plt.plot(l_r)
 plt.title("Learning rate")
 plt.xlabel("$t$")
 plt.ylabel(r"$\gamma$")
+"""
 
 # Plot last and first period
 period_l = int(6.3259/dt)
@@ -371,6 +372,7 @@ for i in range(0,6,2):
 plt.title("Last period")
 
 plt.figure()
+plt.subplot(2,1,1)
 hamil = np.array([hamiltonian(x[:,i]) for i in range(len(sol.t))])
 hamil_h = np.array([Y(xh[:,i])@ah[:,-1] for i in range(len(sol.t))])
 plt.plot(sol.t, hamil)
@@ -379,7 +381,7 @@ plt.legend((r"$\mathcal{H}$", r"$\hat{\mathcal{H}}$"))
 plt.title("Hamiltonian trajectory")
 
 # Plot Hamiltonian error
-plt.figure()
+plt.subplot(2,1,2)
 # he = hamiltonian(xh) - hamiltonian(sol.y)
 plt.plot(sol.t, hamil - hamil_h) 
 plt.title("Hamiltonian error")
@@ -387,7 +389,8 @@ plt.xlabel("$t$")
 plt.ylabel(r"$\hat{\mathcal{H}} - \mathcal{H}$")
 
 # Surfplot of Hamiltonian with respect to position for q1
-fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+fig = plt.figure()
+ax = fig.add_subplot(2,2,1, projection="3d")
 axlim = 2.5
 resolution = 0.05
 q1 = np.arange(-axlim+0.5, axlim+0.5, resolution)
@@ -411,14 +414,15 @@ plt.xlabel("$q_{1,1}$")
 plt.ylabel("$q_{1,2}$")
 
 # Surfplot of estimated Hamiltonian with respect to position for particle 1
-fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+ax = fig.add_subplot(2, 2, 2, projection="3d")
 Z2_plot = np.zeros(X_plot.shape)
-zlim2 = zlim1 #(1.5, 6.5)
 
 for i in range(X_plot.shape[0]):
     for j in range(X_plot.shape[1]):
         Z2_plot[j,i] = Y(np.hstack((q1[i], q2[j], x0[2:]))) @ ah[:,-1]
 
+Z2_max = np.max(Z2_plot)
+zlim2 = (Z2_max - 5, Z2_max)
 Z2_plot = np.clip(Z2_plot, zlim2[0], zlim2[1])
 cnorm2 = matplotlib.colors.Normalize(vmin=zlim2[0], vmax=zlim2[1])
 ax.plot_surface(X_plot, Y_plot, Z2_plot,
@@ -429,17 +433,18 @@ plt.xlabel("$q_{1,1}$")
 plt.ylabel("$q_{1,2}$")
 
 # Surfplot of Hamiltonian with respect to momentum for particle 1
-fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+ax = fig.add_subplot(2, 2, 3, projection="3d")
 p1 = np.arange(-axlim, axlim, resolution)
 p2 = np.arange(-axlim, axlim, resolution)
 X_plot, Y_plot = np.meshgrid(p1, p2)
 Z3_plot = np.zeros(X_plot.shape)
-zlim3 = (-1.6, 3.4)
 
 for i in range(X_plot.shape[0]):
     for j in range(X_plot.shape[1]):
         Z3_plot[j,i] = hamiltonian(np.hstack((x0[:6], p1[i], p2[j], x0[8:])))
 
+Z3_min = np.min(Z3_plot)
+zlim3 = (Z3_min, Z3_min + 5)
 Z3_plot = np.clip(Z3_plot, zlim3[0], zlim3[1])
 cnorm3 = matplotlib.colors.Normalize(vmin=zlim3[0], vmax=zlim3[1])
 ax.plot_surface(X_plot, Y_plot, Z3_plot,
@@ -450,15 +455,16 @@ plt.xlabel("$p_{1,1}$")
 plt.ylabel("$p_{1,2}$")
 
 # Surfplot of estimated Hamiltonian with respect to momentum for particle 1
-fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+ax = fig.add_subplot(2, 2, 4, projection="3d")
 Z4_plot = np.zeros(X_plot.shape)
-zlim4 = zlim3
 
 for i in range(X_plot.shape[0]):
     for j in range(X_plot.shape[1]):
         Z4_plot[j,i] = Y(np.hstack((x0[:6], p1[i], p2[j], x0[8:]))) @ ah[:,-1]
 
 
+Z4_min = np.min(Z4_plot)
+zlim4 = (Z4_min, Z4_min + 5)
 Z4_plot = np.clip(Z4_plot, zlim4[0], zlim4[1])
 cnorm4 = matplotlib.colors.Normalize(vmin=zlim4[0], vmax=zlim4[1])
 ax.plot_surface(X_plot, Y_plot, Z4_plot,
