@@ -1,23 +1,46 @@
+import pdb
+import sys
 import numpy as np
 from matplotlib import pyplot as plt
 
+path = "data/function_fitting/"
 
+# Parse command line input if any
+if len(sys.argv) == 3:
+    algo = sys.argv[1]
+    lp_regulizer = int(sys.argv[2])
+    if algo not in ("md", "gd") or lp_regulizer  not in (0, 1, 2):
+        print("usage: function_fitting.py <algorithm> <regularizer> \n"
+              "\talgorithm:\tmd, gd \n"
+              "\tregularizer:\t1, 2")
+        sys.exit()
+else:
+    algo = "md"
+    lp_regulizer = 0
+
+# Hyperparameters
 n_samples = 10
 dim_regressor = 200
-epochs = 1.2e5
+epochs = 120000
 rla = 2e-4
 rlb = 2e-4
-lp_regulizer = 2
-algo = "gd"
 norm_order = 1.01
+activation_function = "ReLU"
 
+# Function to be fitted
 def f(x):
     return x + np.sin(x)
 
 def ReLU(x):
     return (x>0)*x
 
-def grad_Y_b(x):
+def SiLU(x):
+    return x/(1 + np.exp(-x))
+
+def grad_SiLU_b(x):
+    return (1 + np.exp(-x)*(1+x))/(1+np.exp(-x))**2
+
+def grad_ReLU_b(x):
     return (x>0)*1
 
 def l2_reg(x):
@@ -45,23 +68,32 @@ def spnorm_conj_grad(x, p):
     q = p/(p-1)
     return spnorm_grad(x,q)
 
+# Set random seed for repeatability
 np.random.seed(99)
+# Sample training and test set
 x = np.random.uniform(0, 10, n_samples)
 y = f(x)
-
 xt = np.random.uniform(0, 10, n_samples)
 yt = f(xt)
 
+# Initialize parameters and errors
 a = np.random.uniform(-0.1, 0.1, dim_regressor)
 b = np.random.uniform(-10, 0, dim_regressor)
 e = np.zeros(epochs)
 et = np.zeros(epochs)
 
+if activation_function == "SiLU":
+    activation = SiLU
+    grad_activation_b = grad_SiLU_b
+else:
+    activation = ReLU
+    grad_activation_b = grad_ReLU_b
+
 if algo == "gd":
 
     if lp_regulizer == 2:
-        lambda_1 = 0.15
-        lambda_2 = 0.3
+        lambda_1 = 0.03
+        lambda_2 = 0.1
         regulizer = l2_reg
         grad_regulizer = grad_l2
     elif lp_regulizer == 1:
@@ -89,13 +121,13 @@ if algo == "gd":
         for i in range(n_samples):
             xi = x[i]
             yi = y[i]
-            ReLU_i = ReLU(xi + b)
+            ReLU_i = activation(xi + b)
             ReLU_i_a = ReLU_i@a
-            G_b_i = grad_Y_b(xi + b)
+            G_b_i = grad_activation_b(xi + b)
             d_a += -2*(yi - ReLU_i_a)*ReLU_i
             d_b += -2*(yi - ReLU_i_a)*G_b_i*a
             e[j] += (yi-ReLU_i_a)**2
-            et[j] += (yt[i] - ReLU(xt[i] + b)@a)**2
+            et[j] += (yt[i] - activation(xt[i] + b)@a)**2
 
         e[j] /= n_samples
         et[j] /= n_samples
@@ -104,6 +136,9 @@ if algo == "gd":
 
         a -= rla*(d_a/n_samples + lambda_1*grad_regulizer(a))
         b -= rlb*(d_b/n_samples + lambda_2*grad_regulizer(b))
+
+    np.save(f"{path}gd_l{lp_regulizer}_training", e)
+    np.save(f"{path}gd_l{lp_regulizer}_test", et)
 
 else:
     
@@ -121,13 +156,13 @@ else:
         for i in range(n_samples):
             xi = x[i]
             yi = y[i]
-            ReLU_i = ReLU(xi + b)
+            ReLU_i = activation(xi + b)
             ReLU_i_a = ReLU_i@a
-            G_b_i = grad_Y_b(xi + b)
+            G_b_i = grad_activation_b(xi + b)
             d_g_a += -2*(yi - ReLU_i_a)*ReLU_i
             d_g_b += -2*(yi - ReLU_i_a)*G_b_i*a
             e[j] += (yi-ReLU_i_a)**2
-            et[j] += (yt[i] - ReLU(xt[i] + b)@a)**2
+            et[j] += (yt[i] - activation(xt[i] + b)@a)**2
 
         e[j] /= n_samples
         et[j] /= n_samples
@@ -135,16 +170,21 @@ else:
         g_a -= rla*d_g_a/n_samples
         g_b -= rlb*d_g_b/n_samples
 
+    np.save(f"{path}md_l{norm_order:.0f}_training", e)
+    np.save(f"{path}md_l{norm_order:.0f}_test", et)
+
 plt.figure()
 
 plt.subplot(2,2,1)
 xp = np.linspace(-2, 12, 100)
-yp = np.array([ReLU(xi + b)@a for xi in xp])
+yp = np.array([activation(xi + b)@a for xi in xp])
 plt.plot(xp, yp)
 plt.plot(xp, f(xp), linestyle="--")
 plt.plot(x, y, "xr")
 plt.legend(("Regressor approximation", "True function", "Training samples"))
 plt.title("Function approximation")
+plt.xlabel("$x$")
+plt.ylabel("$y$")
 plt.suptitle(optimization_details)
 
 plt.subplot(2,2,2)
@@ -152,18 +192,25 @@ plt.semilogy(e)
 plt.semilogy(et)
 plt.ylim((1e-4, 30))
 plt.legend(("Training error", "Test error"))
+plt.xlabel("Iteration")
+plt.ylabel(r"$\Vert \hat{y}-y \Vert_2^2$")
 plt.title("Squared fitting error")
 
 
 plt.subplot(2,2,3)
 plt.hist(a, bins=50, range=(-0.5, 0.5))
 plt.ylim((0, 80))
+plt.xlabel(r"$\alpha$")
+plt.ylabel("Frequency")
 plt.title(r"$\alpha$ distribution")
 
 plt.subplot(2,2,4)
 plt.hist(b, bins=50, range=(-12,2))
 plt.ylim((0, 20))
+plt.xlabel(r"$\beta$")
+plt.ylabel("Frequency")
 plt.title(r"$\beta$ distribution")
 
+plt.subplots_adjust(left=0.05, right=0.95, top=0.91, bottom=0.06)
 plt.show()
 

@@ -28,19 +28,14 @@ m1, m2, m3 = 1, 1, 1
 x1, x2 =  (-0.97000436, 0.24308753), (0, 0)
 v1, v2 = (0.4662036850, 0.4323657300), (-0.93240737, -0.86473146)
 x3, v3 = (-x1[0], -x1[1]), v1
-y0 = np.array((x1, x2, x3, v1, v2, v3)).flatten()
+x0 = np.array((x1, x2, x3, v1, v2, v3)).flatten()
 
-# System dynamics
-def dynamics(t, y):
-    x1 = y[:2]/m1
-    x2 = y[2:4]/m2
-    x3 = y[4:6]/m3
-    dy = np.zeros(len(y))
-    dy[0:6] = y[6:12]
-    dy[6:8] = -g*m2*(x1-x2)/l2(x1-x2)**3 - g*m3*(x1-x3)/l2(x1-x3)**3
-    dy[8:10] = -g*m3*(x2-x3)/l2(x2-x3)**3 - g*m1*(x2-x1)/l2(x2-x1)**3
-    dy[10:12] = -g*m1*(x3-x1)/l2(x3-x1)**3 - g*m2*(x3-x2)/l2(x3-x2)**3
-    return dy
+# Initialize estimator
+xh0 = x0
+ah0 = np.zeros(6)
+
+# Initialize simulation state
+X0 = np.hstack((x0, xh0, ah0))
 
 # Simple forward Euler solver for debugging
 def forward_euler(fun, t_span, y0):
@@ -59,9 +54,21 @@ def forward_euler(fun, t_span, y0):
     
     return OdeResult(t=t, y=y, success=success, message=message)
 
+# System dynamics
+def system_dynamics(x):
+    x1 = x[:2]/m1
+    x2 = x[2:4]/m2
+    x3 = x[4:6]/m3
+    dx = np.zeros(len(x))
+    dx[0:6] = x[6:12]
+    dx[6:8] = -g*m2*(x1-x2)/l2(x1-x2)**3 - g*m3*(x1-x3)/l2(x1-x3)**3
+    dx[8:10] = -g*m3*(x2-x3)/l2(x2-x3)**3 - g*m1*(x2-x1)/l2(x2-x1)**3
+    dx[10:12] = -g*m1*(x3-x1)/l2(x3-x1)**3 - g*m2*(x3-x2)/l2(x3-x2)**3
+    return dx
+
 def parameter_dynamics(xh, x):
     """
-        Dynamics of parameter estimate a hat
+        Dynamics of parameter estimate ah
         ph : p hat, estimate of p
         qh: q hat, estimagte of q
         pe: estimate error for p
@@ -147,14 +154,21 @@ def estimate_dynamics(xh, x, ah):
     dqh = del_p_Y @ ah[:3] + kq*(x[:6]-xh[:6])
     return np.hstack((dqh, dph))
 
+def total_dynamics(t, X):
+    dX = np.zeros(len(X))
+    dX[:12] = system_dynamics(X[:12])
+    dX[12:24] = estimate_dynamics(X[12:24], X[:12], X[24:])
+    dX[24:] = parameter_dynamics(X[12:24], X[:12])
+    return dX
+
 def gforce(x1, x2):
     return g*m2*(x1-x2)/l2(x1-x2)**3
 
 # Solve IVP
 if algo == 0:
-    sol = solve_ivp(dynamics, (0, t_end), y0, max_step=dt)
+    sol = solve_ivp(total_dynamics, (0, t_end), X0, max_step=dt)
 elif algo == 1:
-    sol = forward_euler(dynamics, (0, t_end), y0)
+    sol = forward_euler(total_dynamics, (0, t_end), X0)
 
 # Print solver status
 if sol.success:
@@ -163,25 +177,15 @@ else:
     status = "failed"
 print(f'IVP solver {status}: {sol.message}')
 
-# Initialize estimator
-xh = np.zeros(sol.y.shape)
-ah = np.zeros((6, len(sol.t)))
-
-xh[:,0] = y0
-# ah[:,0] = np.random.uniform(0.1, 1.9, 6)   
-# ah[:,0] = np.array((0.5, 0.5, 0.5, 1, 1, 1)) #+ np.random.uniform(-0.3, 0.3, 6)
-ah[:,0] = np.zeros(6)
-
-# Do parameter estimation and simulate estimated dynamics
-for i in range(len(sol.t)-1):
-    del_t = sol.t[i+1] - sol.t[i]
-    xh[:,i+1] = xh[:,i] + estimate_dynamics(xh[:,i], sol.y[:,i], ah[:,i])*del_t
-    ah[:,i+1] = ah[:,i] + parameter_dynamics(xh[:,i], sol.y[:,i])*del_t
+# Extract states
+x = sol.y[:12]
+xh = sol.y[12:24]
+ah = sol.y[24:]
 
 # Plot position trajectory
 plt.figure(1)
 for i in range(0,6):
-    plt.plot(sol.t, sol.y[i], color=viridis(i/6))
+    plt.plot(sol.t, x[i], color=viridis(i/6))
     plt.plot(sol.t, xh[i], linestyle="--", color=viridis(i/6))
 plt.title('Particle positions')
 plt.xlabel("$x_1$")
@@ -190,7 +194,7 @@ plt.ylabel("$x_2$")
 # Plot velocity trajectory
 plt.figure(2)
 for i in range(6,12):
-    plt.plot(sol.t, sol.y[i], color=viridis((i-6)/6))
+    plt.plot(sol.t, x[i], color=viridis((i-6)/6))
     plt.plot(sol.t, xh[i], linestyle="--", color=viridis((i-6)/6))
 plt.title('Particle velocities')
 plt.xlabel(r"$\dot{x}_1$")
@@ -205,7 +209,7 @@ plt.xlabel("time, $t$")
 plt.ylabel("$\hat{a}$")
 
 plt.figure(4)
-xe = np.sum(sol.y - xh, axis=0)
+xe = np.sum(x - xh, axis=0)
 plt.plot(sol.t, xe)
 plt.title("Tracking error")
 plt.xlabel("time, $t$")

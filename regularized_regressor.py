@@ -17,7 +17,7 @@ l2 = np.linalg.norm
 # Gradient of squared p-norm
 def spnorm_grad(x, p):
     # Define gradient as zero close to x=0 to avoid overflows
-    if np.linalg.norm(x, ord=p) < 2e-16:
+    if np.linalg.norm(x, ord=p) < 1e-12:
         return np.zeros(x.shape)
     else:
         return x * (abs(x)/np.linalg.norm(x, ord=p))**(p-2)
@@ -41,8 +41,8 @@ def learning_rate(t):
     else:
         return 0
 
-# Simulation parameters, one period is 6.3259
-dt = 0.1
+# Simulation parameters
+dt = 0.01
 t_end = 150
 
 # Integration algorithm: 0 = scipy, 1 = forward Euler
@@ -60,10 +60,10 @@ kq = 5
 t_d = t_end
 t_end_learning = t_end
 t_open = t_end
-r_d = 1.5
+r_d = 0.1
 theta = 0.3
 w_t = 0
-norm_order = 2
+norm_order = 1.05
 
 # Physical constants
 g = 1
@@ -73,22 +73,33 @@ m1, m2, m3 = 1, 1, 1
 x1, x2 =  (-0.97000436, 0.24308753), (0, 0)
 v1, v2 = (0.4662036850, 0.4323657300), (-0.93240737, -0.86473146)
 x3, v3 = (-x1[0], -x1[1]), v1
+period = 6.3259
+
+# Initial conditions for butterfly periodic solution
+v1 = (0.30689, 0.12551)
+# Isosceles colinear configuration
+x1 = (-1, 0)
+x2 = (1, 0)
+x3 = (0, 0)
+v2 = v1
+v3 = (-2*v1[0], -2*v1[1])
+period = 6.2356
+
+# Pack particle states into system state
 x0 = np.array((x1, x2, x3, v1, v2, v3)).flatten()
 
 # True parameters
-a = np.array((0, 0 ,0, 0, 0, 0, 1.0/(2*m1), 1.0/(2*m2), 1.0/(2*m3),
+a = np.array((0, 0, 0, 0, 0, 0, 1/(2*m1), 1/(2*m2), 1/(2*m3),
                     0, 0, 0, g*m1*m2, g*m2*m3, g*m1*m3, 0, 0, 0, 0, 0, 0))
-"""
-a = np.array((1.0/(2*m1), 1.0/(2*m2), 1.0/(2*m3), 0, 0 ,0, g*m1*m2, g*m2*m3, g*m1*m3, 0, 0, 0, 
-                    0, 0, 0, 0, 0, 0, 0, 0, 0))/2
-"""
 
 # Initial conditions for estimates
 xh0 = x0
+"""
 if norm_order >= 1 and norm_order <= 2:
     ah0 = np.zeros(21)
 else:
     ah0 = 0.1*np.ones(21)
+"""
 ah0 = 0.5*np.ones(21)
 g_ah0 = spnorm_grad(ah0, norm_order)
 g_vh0 = g_ah0
@@ -176,12 +187,12 @@ def nabla_Y(x):
                              [0, 0, -2*qh3[0], 0, 0, -4*qh3[0]**3, 0, 0, 0, 0, 0, 0],
                              [0, 0, -2*qh3[1], 0, 0, -4*qh3[1]**3, 0, 0, 0, 0, 0, 0]])
 
-    del_Y[6:,12:] = np.array([[-gf12_1[0], -gf13_1[0], 0, -gf12_2[0], -gf13_2[0], 0, -gf12_3[0], -gf13_3[0], 0],
-                              [-gf12_1[1], -gf13_1[1], 0, -gf12_2[1], -gf13_2[1], 0, -gf12_3[1], -gf13_3[1], 0],
-                              [gf12_1[0], 0, -gf23_1[0], gf12_2[0], 0, -gf23_2[0], gf12_3[0], 0, -gf23_3[0]],
-                              [gf12_1[1], 0, -gf23_1[1], gf12_2[1], 0, -gf23_2[1], gf12_3[1], 0, -gf23_3[1]],
-                              [0, gf13_1[0], gf23_1[0], 0, gf13_2[0], gf23_2[0], 0, gf13_3[0], gf23_3[0]],
-                              [0, gf13_1[1], gf23_1[1], 0, gf13_2[1], gf23_2[1], 0, gf13_3[1], gf23_3[1]]])
+    del_Y[6:,12:] = np.array([[-gf12_1[0], -gf13_1[0],          0, -gf12_2[0], -gf13_2[0],          0, -gf12_3[0], -gf13_3[0],          0],
+                              [-gf12_1[1], -gf13_1[1],          0, -gf12_2[1], -gf13_2[1],          0, -gf12_3[1], -gf13_3[1],          0],
+                              [ gf12_1[0],          0, -gf23_1[0],  gf12_2[0],          0, -gf23_2[0],  gf12_3[0],          0, -gf23_3[0]],
+                              [ gf12_1[1],          0, -gf23_1[1],  gf12_2[1],          0, -gf23_2[1],  gf12_3[1],          0, -gf23_3[1]],
+                              [         0,   gf13_1[0], gf23_1[0],          0,  gf13_2[0],  gf23_2[0],          0,  gf13_3[0],  gf23_3[0]],
+                              [         0,   gf13_1[1], gf23_1[1],          0,  gf13_2[1],  gf23_2[1],          0,  gf13_3[1],  gf23_3[1]]])
     return del_Y
 
 # True system dynamics
@@ -261,7 +272,7 @@ def hamiltonian(x):
 
 # Solve IVP
 if solver == 0:
-    sol = solve_ivp(total_dynamics, (0, t_end), X0, max_step=dt)
+    sol = solve_ivp(total_dynamics, (0, t_end), X0, max_step=dt, method="Radau")
 elif solver == 1:
     sol = forward_euler(total_dynamics, (0, t_end), X0)
 
@@ -318,6 +329,7 @@ plt.ylabel("$\hat{a}$")
 # Plot histogram of final parameter values
 plt.figure()
 plt.hist(ah[:,-1], bins=20, range=(-0.2, 1.2))
+plt.ylim(0, 16)
 plt.title("Parameter distribution")
 plt.xlabel("Parameter value")
 plt.ylabel("Frequency")
@@ -326,10 +338,11 @@ plt.ylabel("Frequency")
 plt.figure()
 # xe = np.sum(np.abs(x - xh), axis=0)
 xe = l2(x-xh, axis=0)
-plt.plot(sol.t, xe)
+plt.semilogy(sol.t, xe)
 plt.title("Tracking error")
+plt.ylim(1e-4, 0.7)
 plt.xlabel("time, $t$")
-plt.ylabel(r"$\Vert \hat{x} - x \Vert_1$")
+plt.ylabel(r"$\Vert \hat{x} - x \Vert_2$")
 
 """
 # Plot parameter estimate error
@@ -358,7 +371,7 @@ plt.ylabel(r"$\gamma$")
 """
 
 # Plot last and first period
-period_l = int(6.3259/dt)
+period_l = int(period/dt)
 plt.figure()
 plt.subplot(2,1,1)
 for i in range(0,6,2):
@@ -388,11 +401,11 @@ plt.title("Hamiltonian error")
 plt.xlabel("$t$")
 plt.ylabel(r"$\hat{\mathcal{H}} - \mathcal{H}$")
 
-# Surfplot of Hamiltonian with respect to position for q1
+# Surfplot of Hamiltonian potential with respect to position for q1
 fig = plt.figure()
 ax = fig.add_subplot(2,2,1, projection="3d")
 axlim = 2.5
-resolution = 0.05
+resolution = 0.01
 q1 = np.arange(-axlim+0.5, axlim+0.5, resolution)
 q2 = np.arange(-axlim, axlim, resolution)
 X_plot, Y_plot = np.meshgrid(q1, q2)
@@ -401,32 +414,35 @@ zlim1 = (-5, 0)
 
 for i in range(X_plot.shape[0]):
     for j in range(X_plot.shape[1]):
-        Z1_plot[j,i] = hamiltonian(np.hstack((q1[i], q2[j], x0[2:])))
+        Z1_plot[j,i] = hamiltonian(np.hstack((q1[i], q2[j], x[2:,-1])))
 
 Z1_plot = np.clip(Z1_plot, zlim1[0], zlim1[1])
 cnorm1 = matplotlib.colors.Normalize(vmin=zlim1[0], vmax=zlim1[1])
 ax.plot_surface(X_plot, Y_plot, Z1_plot,
-                norm=cnorm1, cmap=cm.coolwarm, linewidth=0, antialiased=True)
+                norm=cnorm1, cmap=cm.coolwarm, linewidth=0, antialiased=False)
 
 ax.set_zlim(zlim1[0], zlim1[1])
 plt.title("Hamiltonian potential")
 plt.xlabel("$q_{1,1}$")
 plt.ylabel("$q_{1,2}$")
 
-# Surfplot of estimated Hamiltonian with respect to position for particle 1
+# Surfplot of estimated Hamiltonian potential with respect to position for particle 1
 ax = fig.add_subplot(2, 2, 2, projection="3d")
 Z2_plot = np.zeros(X_plot.shape)
 
 for i in range(X_plot.shape[0]):
     for j in range(X_plot.shape[1]):
-        Z2_plot[j,i] = Y(np.hstack((q1[i], q2[j], x0[2:]))) @ ah[:,-1]
+        Z2_plot[j,i] = Y(np.hstack((q1[i], q2[j], x[2:,-1]))) @ ah[:,-1]
 
-Z2_max = np.max(Z2_plot)
-zlim2 = (Z2_max - 5, Z2_max)
+if norm_order == 2:
+    Z2_max = np.max(Z2_plot)
+    zlim2 = (Z2_max - 5, Z2_max)
+else:
+    zlim2 = zlim1
 Z2_plot = np.clip(Z2_plot, zlim2[0], zlim2[1])
 cnorm2 = matplotlib.colors.Normalize(vmin=zlim2[0], vmax=zlim2[1])
 ax.plot_surface(X_plot, Y_plot, Z2_plot,
-                norm=cnorm2, cmap=cm.coolwarm, linewidth=0, antialiased=True)
+                norm=cnorm2, cmap=cm.coolwarm, linewidth=0, antialiased=False)
 ax.set_zlim(zlim2[0], zlim2[1])
 plt.title("Estimated Hamiltonian potential")
 plt.xlabel("$q_{1,1}$")
@@ -441,14 +457,14 @@ Z3_plot = np.zeros(X_plot.shape)
 
 for i in range(X_plot.shape[0]):
     for j in range(X_plot.shape[1]):
-        Z3_plot[j,i] = hamiltonian(np.hstack((x0[:6], p1[i], p2[j], x0[8:])))
+        Z3_plot[j,i] = hamiltonian(np.hstack((x0[:6], p1[i], p2[j], x[8:,-1])))
 
 Z3_min = np.min(Z3_plot)
 zlim3 = (Z3_min, Z3_min + 5)
 Z3_plot = np.clip(Z3_plot, zlim3[0], zlim3[1])
 cnorm3 = matplotlib.colors.Normalize(vmin=zlim3[0], vmax=zlim3[1])
 ax.plot_surface(X_plot, Y_plot, Z3_plot,
-                norm=cnorm3, cmap=cm.coolwarm, linewidth=0, antialiased=True)
+                norm=cnorm3, cmap=cm.coolwarm, linewidth=0, antialiased=False)
 ax.set_zlim(zlim3[0], zlim3[1])
 plt.title("Hamiltonian momentum")
 plt.xlabel("$p_{1,1}$")
@@ -460,7 +476,7 @@ Z4_plot = np.zeros(X_plot.shape)
 
 for i in range(X_plot.shape[0]):
     for j in range(X_plot.shape[1]):
-        Z4_plot[j,i] = Y(np.hstack((x0[:6], p1[i], p2[j], x0[8:]))) @ ah[:,-1]
+        Z4_plot[j,i] = Y(np.hstack((x0[:6], p1[i], p2[j], x[8:,-1]))) @ ah[:,-1]
 
 
 Z4_min = np.min(Z4_plot)
@@ -468,10 +484,24 @@ zlim4 = (Z4_min, Z4_min + 5)
 Z4_plot = np.clip(Z4_plot, zlim4[0], zlim4[1])
 cnorm4 = matplotlib.colors.Normalize(vmin=zlim4[0], vmax=zlim4[1])
 ax.plot_surface(X_plot, Y_plot, Z4_plot,
-                norm=cnorm4, cmap=cm.coolwarm, linewidth=0, antialiased=True, zorder=0)
+                norm=cnorm4, cmap=cm.coolwarm, linewidth=0, antialiased=False, zorder=0)
 ax.set_zlim(zlim4[0], zlim4[1])
 plt.title("Estimated Hamiltonian momentum")
 plt.xlabel("$p_{1,1}$")
 plt.ylabel("$p_{1,2}$")
+
+# Plot 3D Hamiltonian potential error
+fig = plt.figure()
+ax = fig.add_subplot(1, 1, 1, projection="3d")
+bias = np.average(Z4_plot - Z3_plot)
+zlim5 = (-2.5, 2.5)
+cnorm5 = matplotlib.colors.Normalize(vmin=-1.8, vmax=1.8)
+Z5_plot = Z2_plot - Z1_plot - bias
+ax.plot_surface(X_plot, Y_plot, Z5_plot,
+        norm=cnorm5, cmap=cm.seismic, linewidth=0, antialiased=False, zorder=0)
+ax.set_zlim(zlim5[0], zlim5[1])
+plt.title(f"Hamiltonian potential error $\\ell_{{{norm_order}}}$")
+plt.xlabel("$q_{1,1}$")
+plt.ylabel("$q_{1,2}$")
 
 plt.show()
